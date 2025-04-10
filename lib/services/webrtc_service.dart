@@ -113,7 +113,7 @@ class WebRTCService {
 
   void _addTracksToConnection() {
     _localStream?.getTracks().forEach((track) {
-      _peerConnection?.addTrack(track, [_localStream!] as MediaStream);
+_peerConnection?.addTrack(track, _localStream!);
     });
   }
 
