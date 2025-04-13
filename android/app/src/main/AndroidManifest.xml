@@ -1,21 +1,61 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-feature android:name="android.hardware.camera" />
-    <uses-feature android:name="android.hardware.camera.autofocus" />
-    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />  
     <uses-permission android:name="android.permission.WRITE_CONTACTS" /> 
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_INTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    
     <application
         android:label="myapp"
-        android:name="${applicationName}"
+        android:name=".MyApplication"
         android:icon="@mipmap/ic_launcher">
+        
+        <!-- Google Play Services & Firebase metadata -->
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
+            
+        <!-- Action for handling Google Play Services updates -->
+        <receiver
+            android:name="com.google.android.gms.measurement.AppMeasurementReceiver"
+            android:enabled="true"
+            android:exported="false">
+        </receiver>
+            
+        <!-- Foreground service for media projection -->
+        <!-- <service
+            android:name=".MediaProjectionService"
+            android:foregroundServiceType="mediaProjection,microphone"
+            android:enabled="true"
+            android:exported="false" /> -->
+            
+        <!-- Foreground service for system_audio_recorder -->
+        <service
+            android:name="com.foregroundservice.ForegroundService"
+            android:foregroundServiceType="mediaProjection">
+        </service>
+            
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -38,21 +78,52 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+            
+        <!-- Make provider installer available for the app -->
+        <provider
+            android:name="com.google.android.gms.common.GooglePlayServicesUtilLight$DynamiteVersion"
+            android:authorities="com.sunio.app.com.google.android.gms.common.GooglePlayServicesUtilLight.DynamiteVersion"
+            android:exported="false"
+            tools:node="remove" />
+            
+        <provider
+            android:name="com.google.android.gms.common.internal.GmsClientSupervisor$DynamiteClassLoader"
+            android:authorities="com.sunio.app.com.google.android.gms.common.internal.GmsClientSupervisor.DynamiteClassLoader"
+            android:exported="false"
+            tools:node="remove" />
     </application>
+    
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
          https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
 
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. --> 
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <package android:name="com.google.android.gms" />
+        <package android:name="com.android.vending" />
+        
+        <!-- Add explicit intent queries for Google APIs -->
+        <intent>
+            <action android:name="com.google.android.gms.phenotype.UPDATE" />
+        </intent>
+        <intent>
+            <action android:name="com.google.android.gms.phenotype.FLAG_OVERRIDE" />
+        </intent>
+        <intent>
+            <action android:name="com.google.android.gms.dynamite.service.DYNAMITE_SERVICE" />
+            <data android:scheme="com.google.android.gms" />
+        </intent>
     </queries>
+
+
 </manifest>

@@ -44,6 +44,9 @@ dependencies:
   audio_session: ^0.2.0
   firebase_auth: ^5.5.2
   flutter_contacts: ^1.1.9+2
+  mobile_number: ^3.0.0
+  internal_audio_recorder: ^0.1.6
+  system_audio_recorder: ^0.0.1
 
 dev_dependencies:
   flutter_test:

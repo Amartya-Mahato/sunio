@@ -2,26 +2,69 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 
 class FirebaseService {
-  static final FirebaseService instance = FirebaseService._internal();
+  static final FirebaseService instance = FirebaseService._();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Map<String, StreamSubscription> _subscriptions = {};
 
-  FirebaseService._internal();
+  FirebaseService._();
+
+  void dispose() {
+    // Cancel all active subscriptions
+    for (var subscription in _subscriptions.values) {
+      subscription.cancel();
+    }
+    _subscriptions.clear();
+  }
 
   // Start a broadcast session
-  static Future<void> startBroadcast(String userId) async {
-    await FirebaseFirestore.instance.collection('broadcasts').doc(userId).set({
-      'userId': userId,
+  static Future<void> startBroadcast(String phoneNumber) async {
+    await FirebaseFirestore.instance.collection('broadcasts').doc(phoneNumber).set({
+      'phoneNumber': phoneNumber,
       'active': true,
       'startedAt': FieldValue.serverTimestamp(),
+      'listeners': [],
     });
   }
 
   // End a broadcast session
-  static Future<void> endBroadcast(String userId) async {
+  static Future<void> endBroadcast(String phoneNumber) async {
     await FirebaseFirestore.instance
         .collection('broadcasts')
-        .doc(userId)
-        .update({'active': false, 'endedAt': FieldValue.serverTimestamp()});
+        .doc(phoneNumber)
+        .update({
+          'active': false,
+          'endedAt': FieldValue.serverTimestamp(),
+          'listeners': [],
+        });
+  }
+
+  // Get active broadcasts
+  Stream<List<Map<String, dynamic>>> getActiveBroadcasts() {
+    return _firestore
+        .collection('broadcasts')
+        .where('active', isEqualTo: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => {
+                  'phoneNumber': doc.id,
+                  'active': doc.data()['active'],
+                  'listeners': doc.data()['listeners'] ?? [],
+                })
+            .toList());
+  }
+
+  // Add a listener to a broadcast
+  Future<void> addListener(String broadcastPhoneNumber, String listenerPhoneNumber) async {
+    await _firestore.collection('broadcasts').doc(broadcastPhoneNumber).update({
+      'listeners': FieldValue.arrayUnion([listenerPhoneNumber]),
+    });
+  }
+
+  // Remove a listener from a broadcast
+  Future<void> removeListener(String broadcastPhoneNumber, String listenerPhoneNumber) async {
+    await _firestore.collection('broadcasts').doc(broadcastPhoneNumber).update({
+      'listeners': FieldValue.arrayRemove([listenerPhoneNumber]),
+    });
   }
 
   // Send an offer to the broadcasting user
@@ -55,21 +98,7 @@ class FirebaseService {
         });
   }
 
-  // Send an ICE candidate to the host
-  Future<void> sendIceCandidateToHost(
-    String broadcastId,
-    Map<String, dynamic> candidate,
-  ) async {
-    await _firestore
-        .collection('broadcasts')
-        .doc(broadcastId)
-        .collection('signaling')
-        .doc('hostCandidates')
-        .collection('candidates')
-        .add({...candidate, 'timestamp': FieldValue.serverTimestamp()});
-  }
-
-  // Send an ICE candidate to viewers
+  // Send ICE candidate to the broadcasting user
   Future<void> sendIceCandidate(
     String broadcastId,
     Map<String, dynamic> candidate,
@@ -78,12 +107,34 @@ class FirebaseService {
         .collection('broadcasts')
         .doc(broadcastId)
         .collection('signaling')
-        .doc('viewerCandidates')
-        .collection('candidates')
-        .add({...candidate, 'timestamp': FieldValue.serverTimestamp()});
+        .doc('ice_candidate')
+        .set({
+          'candidate': candidate['candidate'],
+          'sdpMid': candidate['sdpMid'],
+          'sdpMLineIndex': candidate['sdpMLineIndex'],
+          'timestamp': FieldValue.serverTimestamp(),
+        });
   }
 
-  // Listen for offers
+  // Send ICE candidate to the host from a listener
+  Future<void> sendIceCandidateToHost(
+    String broadcastId,
+    Map<String, dynamic> candidate,
+  ) async {
+    await _firestore
+        .collection('broadcasts')
+        .doc(broadcastId)
+        .collection('signaling')
+        .doc('ice_candidate_from_listener')
+        .set({
+          'candidate': candidate['candidate'],
+          'sdpMid': candidate['sdpMid'],
+          'sdpMLineIndex': candidate['sdpMLineIndex'],
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+  }
+
+  // Listen for offer
   Stream<Map<String, dynamic>?> onOffer(String broadcastId) {
     return _firestore
         .collection('broadcasts')
@@ -91,14 +142,10 @@ class FirebaseService {
         .collection('signaling')
         .doc('offer')
         .snapshots()
-        .map((snapshot) {
-          if (!snapshot.exists) return null;
-          final data = snapshot.data() as Map<String, dynamic>;
-          return {'sdp': data['sdp'], 'type': data['type']};
-        });
+        .map((snapshot) => snapshot.data());
   }
 
-  // Listen for answers
+  // Listen for answer
   Stream<Map<String, dynamic>?> onAnswer(String broadcastId) {
     return _firestore
         .collection('broadcasts')
@@ -106,57 +153,28 @@ class FirebaseService {
         .collection('signaling')
         .doc('answer')
         .snapshots()
-        .map((snapshot) {
-          if (!snapshot.exists) return null;
-          final data = snapshot.data() as Map<String, dynamic>;
-          return {'sdp': data['sdp'], 'type': data['type']};
-        });
+        .map((snapshot) => snapshot.data());
   }
 
-  // Listen for ICE candidates from viewers
+  // Listen for ICE candidate
   Stream<Map<String, dynamic>?> onIceCandidate(String broadcastId) {
     return _firestore
         .collection('broadcasts')
         .doc(broadcastId)
         .collection('signaling')
-        .doc('viewerCandidates')
-        .collection('candidates')
-        .orderBy('timestamp')
-        .limitToLast(1)
+        .doc('ice_candidate')
         .snapshots()
-        .map((snapshot) {
-          if (snapshot.docs.isEmpty) return null;
-          final doc = snapshot.docs.first;
-          return doc.data();
-        });
+        .map((snapshot) => snapshot.data());
   }
 
-  // Listen for ICE candidates from host
+  // Listen for ICE candidate from host
   Stream<Map<String, dynamic>?> onIceCandidateFromHost(String broadcastId) {
     return _firestore
         .collection('broadcasts')
         .doc(broadcastId)
         .collection('signaling')
-        .doc('hostCandidates')
-        .collection('candidates')
-        .orderBy('timestamp')
-        .limitToLast(1)
+        .doc('ice_candidate_from_listener')
         .snapshots()
-        .map((snapshot) {
-          if (snapshot.docs.isEmpty) return null;
-          final doc = snapshot.docs.first;
-          return doc.data();
-        });
-  }
-
-  // Get active broadcasts
-  Stream<List<Map<String, dynamic>>> getActiveBroadcasts() {
-    return _firestore
-        .collection('broadcasts')
-        .where('active', isEqualTo: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) => doc.data()).toList();
-        });
+        .map((snapshot) => snapshot.data());
   }
 }
